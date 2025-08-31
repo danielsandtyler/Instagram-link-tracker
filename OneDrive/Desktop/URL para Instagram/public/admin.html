@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Panel de Admin - Instagram Tracker</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #333; 
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            overflow: hidden;
+        }
+        header {
+            background: #4a5568;
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+        h1 {
+            margin-bottom: 10px;
+            font-size: 2.2em;
+        }
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            padding: 20px;
+            background: #f7fafc;
+        }
+        .stat-card {
+            background: white;
+            padding: 15px;
+            border-radius: 10px;
+            text-align: center;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        .stat-number {
+            font-size: 2em;
+            font-weight: bold;
+            color: #667eea;
+            display: block;
+        }
+        .table-container {
+            padding: 20px;
+            overflow-x: auto;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+        }
+        th, td {
+            padding: 12px 15px;
+            text-align: left;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        th {
+            background: #f7fafc;
+            font-weight: 600;
+            color: #4a5568;
+            position: sticky;
+            top: 0;
+        }
+        tr:hover {
+            background: #f1f5f9;
+        }
+        .timestamp {
+            font-family: monospace;
+            font-size: 0.9em;
+            color: #718096;
+        }
+        .ip-address {
+            font-family: monospace;
+            background: #edf2f7;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 0.9em;
+        }
+        .user-agent {
+            max-width: 300px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #718096;
+        }
+        .error {
+            text-align: center;
+            color: #e53e3e;
+            padding: 20px;
+        }
+        .refresh-btn {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 10px;
+            font-size: 14px;
+        }
+        .refresh-btn:hover {
+            background: #5a67d8;
+        }
+        .header-controls {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 10px;
+            margin-top: 10px;
+        }
+        @media (max-width: 768px) {
+            .container {
+                margin: 10px;
+                border-radius: 10px;
+            }
+            th, td {
+                padding: 8px 10px;
+                font-size: 0.9em;
+            }
+            .stats {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>📊 Panel de Administración</h1>
+            <p>Registro de clicks en tu link de Instagram</p>
+            <div class="header-controls">
+                <button class="refresh-btn" id="refreshBtn">🔄 Actualizar</button>
+                <button class="refresh-btn" id="exportBtn">📊 Exportar CSV</button>
+            </div>
+        </header>
+
+        <div class="stats">
+            <div class="stat-card">
+                <span class="stat-number" id="totalClicks">0</span>
+                <span>Total de Clicks</span>
+            </div>
+            <div class="stat-card">
+                <span class="stat-number" id="uniqueIPs">0</span>
+                <span>IPs Únicas</span>
+            </div>
+            <div class="stat-card">
+                <span class="stat-number" id="todayClicks">0</span>
+                <span>Clicks Hoy</span>
+            </div>
+            <div class="stat-card">
+                <span class="stat-number" id="uniqueDevices">0</span>
+                <span>Dispositivos Únicos</span>
+            </div>
+        </div>
+
+        <div class="table-container">
+            <h2>📝 Historial Detallado (Últimos 100 clicks)</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Dirección IP</th>
+                        <th>Dispositivo/Navegador</th>
+                        <th>Origen</th>
+                        <th>Fecha y Hora</th>
+                    </tr>
+                </thead>
+                <tbody id="clicksTableBody">
+                    <tr>
+                        <td colspan="5" class="loading">
+                            ⏳ Cargando datos...
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        // Función para formatear la fecha
+        function formatDate(dateString) {
+            const options = {
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit'
+            };
+            return new Date(dateString).toLocaleString('es-ES', options);
+        }
+
+        // Función para detectar dispositivo desde user-agent
+        function detectDevice(userAgent) {
+            if (!userAgent) return 'Desconocido';
+            if (userAgent.includes('Mobile')) return '📱 Móvil';
+            if (userAgent.includes('Tablet')) return '📟 Tablet';
+            return '💻 Escritorio';
+        }
+
+        // Función para detectar navegador
+        function detectBrowser(userAgent) {
+            if (!userAgent) return 'Desconocido';
+            if (userAgent.includes('Chrome')) return 'Chrome';
+            if (userAgent.includes('Firefox')) return 'Firefox';
+            if (userAgent.includes('Safari')) return 'Safari';
+            if (userAgent.includes('Edge')) return 'Edge';
+            return 'Otro';
+        }
+
+        // Función para cargar los datos
+        async function loadData() {
+            try {
+                console.log('🔄 Solicitando datos al servidor...');
+                
+                // Mostrar estado de carga
+                document.getElementById('clicksTableBody').innerHTML = `
+                    <tr>
+                        <td colspan="5" class="loading">
+                            ⏳ Cargando datos...
+                        </td>
+                    </tr>
+                `;
+
+                const response = await fetch('/api/clicks');
+                
+                if (!response.ok) {
+                    throw new Error(`Error del servidor: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                console.log('✅ Datos recibidos:', data);
+
+                // Actualizar estadísticas
+                updateStats(data);
+                
+                // Actualizar tabla
+                updateTable(data);
+                
+            } catch (error) {
+                console.error('❌ Error:', error);
+                
+                document.getElementById('clicksTableBody').innerHTML = `
+                    <tr>
+                        <td colspan="5" class="error">
+                            ❌ Error: ${error.message}
+                        </td>
+                    </tr>
+                `;
+            }
+        }
+
+        // Función para actualizar estadísticas
+        function updateStats(data) {
+            document.getElementById('totalClicks').textContent = data.length.toLocaleString();
+            
+            const uniqueIPs = new Set(data.map(item => item.ip_address)).size;
+            document.getElementById('uniqueIPs').textContent = uniqueIPs.toLocaleString();
+            
+            const today = new Date().toLocaleDateString('en-CA');
+            const todayClicks = data.filter(item => {
+                const clickDate = new Date(item.timestamp).toLocaleDateString('en-CA');
+                return clickDate === today;
+            }).length;
+            document.getElementById('todayClicks').textContent = todayClicks.toLocaleString();
+            
+            const uniqueDevices = new Set(data.map(item => detectDevice(item.user_agent))).size;
+            document.getElementById('uniqueDevices').textContent = uniqueDevices.toLocaleString();
+        }
+
+        // Función para actualizar tabla
+        function updateTable(data) {
+            const tableBody = document.getElementById('clicksTableBody');
+            
+            if (data.length === 0) {
+                tableBody.innerHTML = `
+                    <tr>
+                        <td colspan="5" class="loading">
+                            📝 No hay clicks registrados todavía.
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+            
+            tableBody.innerHTML = data.map(click => `
+                <tr>
+                    <td>${click.id}</td>
+                    <td><span class="ip-address">${click.ip_address}</span></td>
+                    <td class="user-agent" title="${click.user_agent || 'Desconocido'}">
+                        ${detectDevice(click.user_agent)} - ${detectBrowser(click.user_agent)}
+                    </td>
+                    <td>${click.referer || 'Directo'}</td>
+                    <td class="timestamp">${formatDate(click.timestamp)}</td>
+                </tr>
+            `).join('');
+        }
+
+        // Función para exportar datos a CSV
+        function exportData() {
+            fetch('/api/clicks')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.length === 0) {
+                        alert('No hay datos para exportar');
+                        return;
+                    }
+
+                    // Crear CSV
+                    let csv = 'ID,IP Address,User Agent,Referer,Timestamp\n';
+                    data.forEach(item => {
+                        csv += `"${item.id}","${item.ip_address}","${item.user_agent || ''}","${item.referer || ''}","${item.timestamp}"\n`;
+                    });
+
+                    // Descargar archivo
+                    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+                    const link = document.createElement('a');
+                    const url = URL.createObjectURL(blob);
+                    link.setAttribute('href', url);
+                    link.setAttribute('download', `clicks_export_${new Date().toISOString().split('T')[0]}.csv`);
+                    link.style.visibility = 'hidden';
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                })
+                .catch(error => {
+                    console.error('Error exportando datos:', error);
+                    alert('Error al exportar datos: ' + error.message);
+                });
+        }
+
+        // Event listeners para los botones
+        document.addEventListener('DOMContentLoaded', function() {
+            document.getElementById('refreshBtn').addEventListener('click', loadData);
+            document.getElementById('exportBtn').addEventListener('click', exportData);
+            
+            // Cargar datos al iniciar
+            loadData();
+        });
+    </script>
+</body>
+</html>
