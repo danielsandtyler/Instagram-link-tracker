@@ -87,6 +87,30 @@ const db = new sqlite3.Database('clicks.db', (err) => {
     }
 });
 
+// 🔐 MIDDLEWARE DE AUTENTICACIÓN PARA ADMIN (NUEVO)
+const authMiddleware = (req, res, next) => {
+    const auth = { login: 'admin', password: 'quechuchasapeasgil@' } // CAMBIA ESTA CONTRASEÑA!
+    
+    // Parsear login y password de headers
+    const b64auth = (req.headers.authorization || '').split(' ')[1] || '';
+    const [login, password] = Buffer.from(b64auth, 'base64').toString().split(':');
+    
+    // Verificar credenciales
+    if (login && password && login === auth.login && password === auth.password) {
+        return next(); // ✅ Acceso permitido
+    }
+    
+    // Solicitar autenticación
+    res.set('WWW-Authenticate', 'Basic realm="Panel Admin"');
+    res.status(401).send(`
+        <div style="text-align: center; padding: 50px;">
+            <h2>🔒 Acceso restringido</h2>
+            <p>Se requiere autenticación para acceder al panel de administración</p>
+            <a href="/inicio">Volver al inicio</a>
+        </div>
+    `);
+};
+
 // 8. RUTAS PRINCIPALES
 // Ruta para la página principal
 app.get('/inicio', (req, res) => {
@@ -123,7 +147,7 @@ app.get('/inicio', (req, res) => {
             <h1>🚀 Instagram Link Tracker</h1>
             <p>Servidor funcionando correctamente</p>
             <div>
-                <a href="/mi-perfil">Probar link de tracking</a>
+                <a href="/">Probar link de tracking</a>
                 <a href="/admin">Ver panel de administración</a>
             </div>
         </body>
@@ -166,8 +190,8 @@ app.get('/api/clicks', (req, res) => {
     });
 });
 
-// Ruta para servir el panel de admin HTML (CORREGIDA)
-app.get('/admin', (req, res) => {
+// 🔐 Ruta para servir el panel de admin HTML CON AUTENTICACIÓN
+app.get('/admin', authMiddleware, (req, res) => {
     const nonce = res.locals.nonce;
     
     try {
@@ -178,7 +202,7 @@ app.get('/admin', (req, res) => {
                 <div style="text-align: center; padding: 50px;">
                     <h2>Error: admin.html no encontrado</h2>
                     <p>El archivo admin.html no existe en la carpeta public/</p>
-                    <a href="/">Volver al inicio</a>
+                    <a href="/inicio">Volver al inicio</a>
                 </div>
             `);
         }
@@ -212,7 +236,7 @@ app.use((err, req, res, next) => {
         <div style="text-align: center; padding: 50px;">
             <h2>Error del servidor</h2>
             <p>Algo salió mal. Por favor, intenta más tarde.</p>
-            <a href="/">Volver al inicio</a>
+            <a href="/inicio">Volver al inicio</a>
         </div>
     `);
 });
@@ -223,7 +247,7 @@ app.use((req, res) => {
         <div style="text-align: center; padding: 50px;">
             <h2>404 - Página no encontrada</h2>
             <p>La página que buscas no existe.</p>
-            <a href="/">Volver al inicio</a>
+            <a href="/inicio">Volver al inicio</a>
         </div>
     `);
 });
@@ -234,7 +258,7 @@ const server = app.listen(PORT, '0.0.0.0', () => {
 ✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨
 🚀 Servidor ejecutándose en: http://localhost:${PORT}
 
-👉 Link de tracking: http://localhost:${PORT}/mi-perfil
+👉 Link de tracking: http://localhost:${PORT}/
 👁️  Panel de admin:    http://localhost:${PORT}/admin
 📊 API de datos:       http://localhost:${PORT}/api/clicks
 ✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨
@@ -257,8 +281,6 @@ process.on('SIGINT', () => {
     });
 });
 
-
-
 // En server.js puedes agregar:
 app.get('/api/stats', (req, res) => {
     const sql = `
@@ -273,7 +295,6 @@ app.get('/api/stats', (req, res) => {
         res.json(row);
     });
 });
-
 
 // Agrega esto a server.js
 setInterval(() => {
