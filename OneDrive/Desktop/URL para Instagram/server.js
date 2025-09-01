@@ -89,7 +89,7 @@ const db = new sqlite3.Database('clicks.db', (err) => {
 
 // 8. RUTAS PRINCIPALES
 // Ruta para la página principal
-app.get('/', (req, res) => {
+app.get('/inicio', (req, res) => {
     const nonce = res.locals.nonce;
     
     res.send(`
@@ -132,7 +132,7 @@ app.get('/', (req, res) => {
 });
 
 // Ruta de Tracking Principal
-app.get('/mi-perfil', (req, res) => {
+app.get('/', (req, res) => {
     // Capturar datos del usuario de forma segura
     const ipAddress = req.ip || req.connection.remoteAddress;
     const userAgent = req.get('User-Agent') || 'Desconocido';
