@@ -14,7 +14,7 @@
             padding: 20px;
         }
         .container {
-            max-width: 1200px;
+            max-width: 1400px;
             margin: 0 auto;
             background: white;
             border-radius: 15px;
@@ -50,6 +50,10 @@
             font-weight: bold;
             color: #667eea;
             display: block;
+        }
+        .stat-label {
+            font-size: 0.9em;
+            color: #718096;
         }
         .table-container {
             padding: 20px;
@@ -87,8 +91,20 @@
             border-radius: 4px;
             font-size: 0.9em;
         }
+        .country-flag {
+            font-size: 1.2em;
+            margin-right: 5px;
+        }
+        .click-badge {
+            background: #667eea;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 0.8em;
+            margin-left: 5px;
+        }
         .user-agent {
-            max-width: 300px;
+            max-width: 250px;
             overflow: hidden;
             text-overflow: ellipsis;
             white-space: nowrap;
@@ -110,7 +126,7 @@
             padding: 10px 20px;
             border-radius: 5px;
             cursor: pointer;
-            margin: 10px;
+            margin: 5px;
             font-size: 14px;
         }
         .refresh-btn:hover {
@@ -122,6 +138,29 @@
             align-items: center;
             gap: 10px;
             margin-top: 10px;
+            flex-wrap: wrap;
+        }
+        .tab-container {
+            display: flex;
+            border-bottom: 2px solid #e2e8f0;
+            padding: 0 20px;
+        }
+        .tab {
+            padding: 10px 20px;
+            cursor: pointer;
+            border-bottom: 3px solid transparent;
+        }
+        .tab.active {
+            border-bottom-color: #667eea;
+            color: #667eea;
+            font-weight: 600;
+        }
+        .tab-content {
+            display: none;
+            padding: 20px;
+        }
+        .tab-content.active {
+            display: block;
         }
         @media (max-width: 768px) {
             .container {
@@ -135,6 +174,9 @@
             .stats {
                 grid-template-columns: 1fr;
             }
+            .header-controls {
+                flex-direction: column;
+            }
         }
     </style>
 </head>
@@ -146,52 +188,114 @@
             <div class="header-controls">
                 <button class="refresh-btn" id="refreshBtn">🔄 Actualizar</button>
                 <button class="refresh-btn" id="exportBtn">📊 Exportar CSV</button>
+                <button class="refresh-btn" id="switchTabBtn">🌎 Ver Estadísticas</button>
             </div>
         </header>
 
-        <div class="stats">
-            <div class="stat-card">
-                <span class="stat-number" id="totalClicks">0</span>
-                <span>Total de Clicks</span>
+        <div class="tab-container">
+            <div class="tab active" data-tab="details">📝 Detalles de Clicks</div>
+            <div class="tab" data-tab="stats">📈 Estadísticas Avanzadas</div>
+        </div>
+
+        <!-- Pestaña de Detalles -->
+        <div class="tab-content active" id="detailsTab">
+            <div class="stats">
+                <div class="stat-card">
+                    <span class="stat-number" id="totalClicks">0</span>
+                    <span class="stat-label">Total de Clicks</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-number" id="uniqueIPs">0</span>
+                    <span class="stat-label">IPs Únicas</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-number" id="todayClicks">0</span>
+                    <span class="stat-label">Clicks Hoy</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-number" id="uniqueCountries">0</span>
+                    <span class="stat-label">Países</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-number" id="repeatedClicks">0</span>
+                    <span class="stat-label">Clicks Repetidos</span>
+                </div>
             </div>
-            <div class="stat-card">
-                <span class="stat-number" id="uniqueIPs">0</span>
-                <span>IPs Únicas</span>
-            </div>
-            <div class="stat-card">
-                <span class="stat-number" id="todayClicks">0</span>
-                <span>Clicks Hoy</span>
-            </div>
-            <div class="stat-card">
-                <span class="stat-number" id="uniqueDevices">0</span>
-                <span>Dispositivos Únicos</span>
+
+            <div class="table-container">
+                <h2>📝 Historial Detallado (Últimos 100 clicks)</h2>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>IP Address</th>
+                            <th>País</th>
+                            <th>Dispositivo/Navegador</th>
+                            <th>Clicks</th>
+                            <th>Origen</th>
+                            <th>Fecha y Hora</th>
+                        </tr>
+                    </thead>
+                    <tbody id="clicksTableBody">
+                        <tr>
+                            <td colspan="7" class="loading">
+                                ⏳ Cargando datos...
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
             </div>
         </div>
 
-        <div class="table-container">
-            <h2>📝 Historial Detallado (Últimos 100 clicks)</h2>
-            <table>
-                <thead>
-                    <tr>
-                        <th>ID</th>
-                        <th>Dirección IP</th>
-                        <th>Dispositivo/Navegador</th>
-                        <th>Origen</th>
-                        <th>Fecha y Hora</th>
-                    </tr>
-                </thead>
-                <tbody id="clicksTableBody">
-                    <tr>
-                        <td colspan="5" class="loading">
-                            ⏳ Cargando datos...
-                        </td>
-                    </tr>
-                </tbody>
-            </table>
+        <!-- Pestaña de Estadísticas -->
+        <div class="tab-content" id="statsTab">
+            <div class="stats">
+                <div class="stat-card">
+                    <span class="stat-number" id="statsTotalClicks">0</span>
+                    <span class="stat-label">Clicks Totales</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-number" id="statsUniqueIPs">0</span>
+                    <span class="stat-label">IPs Únicas</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-number" id="statsRepeatedClicks">0</span>
+                    <span class="stat-label">Clicks Repetidos</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-number" id="statsUniqueCountries">0</span>
+                    <span class="stat-label">Países Únicos</span>
+                </div>
+            </div>
+
+            <div class="table-container">
+                <h2>🌎 Distribución por País</h2>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>País</th>
+                            <th>Clicks Totales</th>
+                            <th>IPs Únicas</th>
+                            <th>Porcentaje</th>
+                        </tr>
+                    </thead>
+                    <tbody id="countryStatsBody">
+                        <tr>
+                            <td colspan="4" class="loading">
+                                ⏳ Cargando estadísticas...
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
         </div>
     </div>
 
     <script>
+        // Variables globales
+        let currentTab = 'details';
+        let clicksData = [];
+
         // Función para formatear la fecha
         function formatDate(dateString) {
             const options = {
@@ -223,7 +327,40 @@
             return 'Otro';
         }
 
-        // Función para cargar los datos
+        // Función para obtener bandera de país (emoji aproximado)
+        function getCountryFlag(country) {
+            if (!country || country === 'Desconocido' || country === 'Local') return '🌐';
+            
+            const flags = {
+                'Perú': '🇵🇪', 'Mexico': '🇲🇽', 'Colombia': '🇨🇴', 'Argentina': '🇦🇷',
+                'Chile': '🇨🇱', 'Spain': '🇪🇸', 'United States': '🇺🇸', 'Ecuador': '🇪🇨',
+                'Venezuela': '🇻🇪', 'Brazil': '🇧🇷', 'Bolivia': '🇧🇴', 'Uruguay': '🇺🇾',
+                'Paraguay': '🇵🇾', 'Panama': '🇵🇦', 'Costa Rica': '🇨🇷'
+            };
+            
+            return flags[country] || '🇺🇳';
+        }
+
+        // Función para cambiar de pestaña
+        function switchTab(tabName) {
+            currentTab = tabName;
+            
+            // Actualizar UI de pestañas
+            document.querySelectorAll('.tab').forEach(tab => {
+                tab.classList.toggle('active', tab.dataset.tab === tabName);
+            });
+            
+            document.querySelectorAll('.tab-content').forEach(content => {
+                content.classList.toggle('active', content.id === tabName + 'Tab');
+            });
+            
+            // Cargar datos específicos de la pestaña
+            if (tabName === 'stats') {
+                loadAdvancedStats();
+            }
+        }
+
+        // Función para cargar los datos principales
         async function loadData() {
             try {
                 console.log('🔄 Solicitando datos al servidor...');
@@ -231,33 +368,41 @@
                 // Mostrar estado de carga
                 document.getElementById('clicksTableBody').innerHTML = `
                     <tr>
-                        <td colspan="5" class="loading">
+                        <td colspan="7" class="loading">
                             ⏳ Cargando datos...
                         </td>
                     </tr>
                 `;
 
-                const response = await fetch('/api/clicks');
+                const [clicksResponse, statsResponse] = await Promise.all([
+                    fetch('/api/clicks'),
+                    fetch('/api/advanced-stats')
+                ]);
                 
-                if (!response.ok) {
-                    throw new Error(`Error del servidor: ${response.status}`);
+                if (!clicksResponse.ok || !statsResponse.ok) {
+                    throw new Error(`Error del servidor: ${clicksResponse.status}`);
                 }
                 
-                const data = await response.json();
-                console.log('✅ Datos recibidos:', data);
+                const clicksData = await clicksResponse.json();
+                const statsData = await statsResponse.json();
+                
+                console.log('✅ Datos recibidos:', { clicks: clicksData.length, stats: statsData });
 
+                // Guardar datos globalmente
+                window.clicksData = clicksData;
+                
                 // Actualizar estadísticas
-                updateStats(data);
+                updateStats(statsData);
                 
                 // Actualizar tabla
-                updateTable(data);
+                updateTable(clicksData);
                 
             } catch (error) {
                 console.error('❌ Error:', error);
                 
                 document.getElementById('clicksTableBody').innerHTML = `
                     <tr>
-                        <td colspan="5" class="error">
+                        <td colspan="7" class="error">
                             ❌ Error: ${error.message}
                         </td>
                     </tr>
@@ -265,32 +410,101 @@
             }
         }
 
-        // Función para actualizar estadísticas
+        // Función para cargar estadísticas avanzadas
+        async function loadAdvancedStats() {
+            try {
+                const response = await fetch('/api/advanced-stats');
+                if (!response.ok) throw new Error(`Error: ${response.status}`);
+                
+                const stats = await response.json();
+                updateAdvancedStats(stats);
+                
+                // Calcular distribución por países
+                calculateCountryStats();
+                
+            } catch (error) {
+                console.error('❌ Error cargando stats avanzadas:', error);
+                document.getElementById('countryStatsBody').innerHTML = `
+                    <tr>
+                        <td colspan="4" class="error">
+                            ❌ Error: ${error.message}
+                        </td>
+                    </tr>
+                `;
+            }
+        }
+
+        // Función para actualizar estadísticas principales
         function updateStats(data) {
-            document.getElementById('totalClicks').textContent = data.length.toLocaleString();
+            document.getElementById('totalClicks').textContent = data.total_clicks.toLocaleString();
+            document.getElementById('uniqueIPs').textContent = data.unique_ips.toLocaleString();
+            document.getElementById('repeatedClicks').textContent = data.repeated_clicks.toLocaleString();
+            document.getElementById('uniqueCountries').textContent = data.unique_countries.toLocaleString();
             
-            const uniqueIPs = new Set(data.map(item => item.ip_address)).size;
-            document.getElementById('uniqueIPs').textContent = uniqueIPs.toLocaleString();
-            
+            // Calcular clicks de hoy
             const today = new Date().toLocaleDateString('en-CA');
-            const todayClicks = data.filter(item => {
+            const todayClicks = window.clicksData.filter(item => {
                 const clickDate = new Date(item.timestamp).toLocaleDateString('en-CA');
                 return clickDate === today;
             }).length;
             document.getElementById('todayClicks').textContent = todayClicks.toLocaleString();
-            
-            const uniqueDevices = new Set(data.map(item => detectDevice(item.user_agent))).size;
-            document.getElementById('uniqueDevices').textContent = uniqueDevices.toLocaleString();
         }
 
-        // Función para actualizar tabla
+        // Función para actualizar estadísticas avanzadas
+        function updateAdvancedStats(data) {
+            document.getElementById('statsTotalClicks').textContent = data.total_clicks.toLocaleString();
+            document.getElementById('statsUniqueIPs').textContent = data.unique_ips.toLocaleString();
+            document.getElementById('statsRepeatedClicks').textContent = data.repeated_clicks.toLocaleString();
+            document.getElementById('statsUniqueCountries').textContent = data.unique_countries.toLocaleString();
+        }
+
+        // Función para calcular estadísticas por país
+        function calculateCountryStats() {
+            const countryMap = {};
+            
+            window.clicksData.forEach(click => {
+                const country = click.country || 'Desconocido';
+                if (!countryMap[country]) {
+                    countryMap[country] = {
+                        totalClicks: 0,
+                        uniqueIPs: new Set(),
+                        clicks: 0
+                    };
+                }
+                
+                countryMap[country].totalClicks += (click.click_count || 1);
+                countryMap[country].uniqueIPs.add(click.ip_address);
+                countryMap[country].clicks++;
+            });
+            
+            // Convertir a array y ordenar
+            const countryStats = Object.entries(countryMap).map(([country, data]) => ({
+                country,
+                totalClicks: data.totalClicks,
+                uniqueIPs: data.uniqueIPs.size,
+                percentage: ((data.totalClicks / window.clicksData.reduce((sum, click) => sum + (click.click_count || 1), 0)) * 100).toFixed(1)
+            })).sort((a, b) => b.totalClicks - a.totalClicks);
+            
+            // Actualizar tabla
+            const tableBody = document.getElementById('countryStatsBody');
+            tableBody.innerHTML = countryStats.map(stat => `
+                <tr>
+                    <td>${getCountryFlag(stat.country)} ${stat.country}</td>
+                    <td>${stat.totalClicks.toLocaleString()}</td>
+                    <td>${stat.uniqueIPs.toLocaleString()}</td>
+                    <td>${stat.percentage}%</td>
+                </tr>
+            `).join('');
+        }
+
+        // Función para actualizar tabla principal
         function updateTable(data) {
             const tableBody = document.getElementById('clicksTableBody');
             
             if (data.length === 0) {
                 tableBody.innerHTML = `
                     <tr>
-                        <td colspan="5" class="loading">
+                        <td colspan="7" class="loading">
                             📝 No hay clicks registrados todavía.
                         </td>
                     </tr>
@@ -302,8 +516,13 @@
                 <tr>
                     <td>${click.id}</td>
                     <td><span class="ip-address">${click.ip_address}</span></td>
+                    <td>${getCountryFlag(click.country)} ${click.country || 'Desconocido'}</td>
                     <td class="user-agent" title="${click.user_agent || 'Desconocido'}">
                         ${detectDevice(click.user_agent)} - ${detectBrowser(click.user_agent)}
+                    </td>
+                    <td>
+                        ${click.click_count || 1}
+                        ${(click.click_count || 0) > 1 ? '<span class="click-badge">+' + (click.click_count - 1) + '</span>' : ''}
                     </td>
                     <td>${click.referer || 'Directo'}</td>
                     <td class="timestamp">${formatDate(click.timestamp)}</td>
@@ -322,9 +541,9 @@
                     }
 
                     // Crear CSV
-                    let csv = 'ID,IP Address,User Agent,Referer,Timestamp\n';
+                    let csv = 'ID,IP Address,País,User Agent,Referer,Click Count,Timestamp\n';
                     data.forEach(item => {
-                        csv += `"${item.id}","${item.ip_address}","${item.user_agent || ''}","${item.referer || ''}","${item.timestamp}"\n`;
+                        csv += `"${item.id}","${item.ip_address}","${item.country || 'Desconocido'}","${item.user_agent || ''}","${item.referer || ''}","${item.click_count || 1}","${item.timestamp}"\n`;
                     });
 
                     // Descargar archivo
@@ -346,22 +565,23 @@
 
         // Event listeners para los botones
         document.addEventListener('DOMContentLoaded', function() {
+            // Botones principales
             document.getElementById('refreshBtn').addEventListener('click', loadData);
             document.getElementById('exportBtn').addEventListener('click', exportData);
-            
+            document.getElementById('switchTabBtn').addEventListener('click', function() {
+                switchTab(currentTab === 'details' ? 'stats' : 'details');
+            });
+
+            // Tabs
+            document.querySelectorAll('.tab').forEach(tab => {
+                tab.addEventListener('click', function() {
+                    switchTab(this.dataset.tab);
+                });
+            });
+
             // Cargar datos al iniciar
             loadData();
         });
     </script>
-
-    
-
-<footer>
-    <small>
-        Este tracker recolecta datos de clicks de forma anónima 
-        para métricas personales. No se comparte con terceros.
-    </small>
-</footer>
-
 </body>
 </html>

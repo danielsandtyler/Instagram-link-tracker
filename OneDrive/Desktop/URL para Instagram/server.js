@@ -7,6 +7,7 @@ const rateLimit = require('express-rate-limit');
 const cors = require('cors');
 const crypto = require('crypto');
 const fs = require('fs');
+const { getCountryFromIP, normalizeIP } = require('./geo-utils');
 
 // 1. Crear la aplicación Express
 const app = express();
@@ -22,12 +23,12 @@ app.use(compression());
 app.use(cors());
 
 // 3. ✅ CONFIGURACIÓN SEGURA DE TRUST PROXY (Corregido)
-app.set('trust proxy', 1); // Solo confía en 1 proxy intermedio
+app.set('trust proxy', 1);
 
 // 4. Limitador de tasa para prevenir abusos
 const limiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 minutos
-    max: 100, // máximo 100 requests por ventana
+    windowMs: 15 * 60 * 1000,
+    max: 100,
     message: 'Demasiadas solicitudes desde esta IP, intenta nuevamente en 15 minutos.'
 });
 app.use(limiter);
@@ -46,7 +47,7 @@ app.use((req, res, next) => {
             directives: {
                 defaultSrc: ["'self'"],
                 scriptSrc: ["'self'", `'nonce-${nonce}'`],
-                scriptSrcAttr: ["'none'"], // ✅ Bloquea onclick pero permite addEventListener
+                scriptSrcAttr: ["'none'"],
                 styleSrc: ["'self'", "'unsafe-inline'"],
                 imgSrc: ["'self'", "data:", "https:"],
                 connectSrc: ["'self'"],
@@ -68,13 +69,15 @@ const db = new sqlite3.Database('clicks.db', (err) => {
     } else {
         console.log('✅ Conectado a la base de datos SQLite.');
         
-        // ✅ CREAR TABLA CON ESTRUCTURA CORRECTA
+        // ✅ CREAR TABLA MEJORADA
         db.run(`
             CREATE TABLE IF NOT EXISTS clicks (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 ip_address TEXT,
                 user_agent TEXT,
                 referer TEXT,
+                country TEXT DEFAULT 'Desconocido',
+                click_count INTEGER DEFAULT 1,
                 timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
             )
         `, (err) => {
@@ -82,25 +85,35 @@ const db = new sqlite3.Database('clicks.db', (err) => {
                 console.error('❌ Error creando tabla:', err.message);
             } else {
                 console.log('✅ Tabla "clicks" verificada/creada correctamente.');
+                
+                // Intentar agregar columnas si no existen (ignorar errores si ya existen)
+db.run(`ALTER TABLE clicks ADD COLUMN country TEXT DEFAULT 'Desconocido'`, (err) => {
+    if (err && !err.message.includes('duplicate column name')) {
+        console.error('❌ Error agregando columna country:', err.message);
+    }
+});
+
+db.run(`ALTER TABLE clicks ADD COLUMN click_count INTEGER DEFAULT 1`, (err) => {
+    if (err && !err.message.includes('duplicate column name')) {
+        console.error('❌ Error agregando columna click_count:', err.message);
+    }
+});
             }
         });
     }
 });
 
-// 🔐 MIDDLEWARE DE AUTENTICACIÓN PARA ADMIN (NUEVO)
+// 🔐 MIDDLEWARE DE AUTENTICACIÓN PARA ADMIN
 const authMiddleware = (req, res, next) => {
-    const auth = { login: 'admin', password: 'quechuchasapeasgil@' } // CAMBIA ESTA CONTRASEÑA!
+    const auth = { login: 'admin', password: 'quechuchasapeasgil@' };
     
-    // Parsear login y password de headers
     const b64auth = (req.headers.authorization || '').split(' ')[1] || '';
     const [login, password] = Buffer.from(b64auth, 'base64').toString().split(':');
     
-    // Verificar credenciales
     if (login && password && login === auth.login && password === auth.password) {
-        return next(); // ✅ Acceso permitido
+        return next();
     }
     
-    // Solicitar autenticación
     res.set('WWW-Authenticate', 'Basic realm="Panel Admin"');
     res.status(401).send(`
         <div style="text-align: center; padding: 50px;">
@@ -112,7 +125,6 @@ const authMiddleware = (req, res, next) => {
 };
 
 // 8. RUTAS PRINCIPALES
-// Ruta para la página principal
 app.get('/inicio', (req, res) => {
     const nonce = res.locals.nonce;
     
@@ -155,30 +167,62 @@ app.get('/inicio', (req, res) => {
     `);
 });
 
-// Ruta de Tracking Principal
-app.get('/', (req, res) => {
-    // Capturar datos del usuario de forma segura
-    const ipAddress = req.ip || req.connection.remoteAddress;
+// Ruta de Tracking Principal MEJORADA
+app.get('/', async (req, res) => {
+    const rawIP = req.ip || req.connection.remoteAddress;
+    const ipAddress = normalizeIP(rawIP);
     const userAgent = req.get('User-Agent') || 'Desconocido';
     const referer = req.get('Referer') || 'Directo';
 
     console.log('📥 Click registrado desde IP:', ipAddress);
 
-    // Guardar en la base de datos
-    const sql = `INSERT INTO clicks (ip_address, user_agent, referer) VALUES (?, ?, ?)`;
-    db.run(sql, [ipAddress, userAgent, referer], function(err) {
-        if (err) {
-            console.error('❌ Error al guardar en BD:', err.message);
-        } else {
-            console.log(`✅ Click guardado con ID: ${this.lastID}`);
-        }
-    });
+    try {
+        // Obtener país de la IP
+        const country = await getCountryFromIP(ipAddress);
+        
+        // Verificar si la IP ya hizo click hoy
+        db.get(
+            `SELECT id, click_count FROM clicks WHERE ip_address = ? AND DATE(timestamp) = DATE('now')`,
+            [ipAddress],
+            async (err, row) => {
+                if (err) {
+                    console.error('❌ Error verificando IP:', err.message);
+                    return res.redirect('https://www.instagram.com/daniel_sandoval_ch/');
+                }
 
-    // ✅ Esta redirección se ejecuta SIEMPRE
-    res.redirect('https://www.instagram.com/daniel_sandoval_ch/');
+                if (row) {
+                    // Actualizar contador existente
+                    db.run(
+                        `UPDATE clicks SET click_count = click_count + 1 WHERE id = ?`,
+                        [row.id],
+                        function(err) {
+                            if (err) console.error('❌ Error actualizando click:', err.message);
+                            else console.log(`✅ Click #${this.changes} actualizado para IP: ${ipAddress}`);
+                        }
+                    );
+                } else {
+                    // Insertar nuevo registro
+                    db.run(
+                        `INSERT INTO clicks (ip_address, user_agent, referer, country) VALUES (?, ?, ?, ?)`,
+                        [ipAddress, userAgent, referer, country],
+                        function(err) {
+                            if (err) console.error('❌ Error insertando click:', err.message);
+                            else console.log(`✅ Nuevo click guardado ID: ${this.lastID} desde: ${country}`);
+                        }
+                    );
+                }
+                
+                // Redirigir siempre a Instagram
+                res.redirect('https://www.instagram.com/daniel_sandoval_ch/');
+            }
+        );
+    } catch (error) {
+        console.error('❌ Error en tracking:', error);
+        res.redirect('https://www.instagram.com/daniel_sandoval_ch/');
+    }
 });
 
-// Ruta para la API que proporciona los datos en JSON
+// API de clicks MEJORADA
 app.get('/api/clicks', (req, res) => {
     const sql = `SELECT * FROM clicks ORDER BY timestamp DESC LIMIT 100`;
     db.all(sql, [], (err, rows) => {
@@ -190,7 +234,28 @@ app.get('/api/clicks', (req, res) => {
     });
 });
 
-// 🔐 Ruta para servir el panel de admin HTML CON AUTENTICACIÓN
+// NUEVA API: Estadísticas avanzadas
+app.get('/api/advanced-stats', (req, res) => {
+    const sql = `
+        SELECT 
+            COUNT(*) as total_clicks,
+            COUNT(DISTINCT ip_address) as unique_ips,
+            SUM(click_count) - COUNT(*) as repeated_clicks,
+            GROUP_CONCAT(DISTINCT country) as countries,
+            COUNT(DISTINCT country) as unique_countries
+        FROM clicks
+    `;
+    
+    db.get(sql, [], (err, row) => {
+        if (err) {
+            console.error('❌ Error en stats avanzadas:', err.message);
+            return res.status(500).json({ error: err.message });
+        }
+        res.json(row);
+    });
+});
+
+// 🔐 Panel de admin con autenticación
 app.get('/admin', authMiddleware, (req, res) => {
     const nonce = res.locals.nonce;
     
@@ -208,8 +273,6 @@ app.get('/admin', authMiddleware, (req, res) => {
         }
         
         let adminHtml = fs.readFileSync(adminHtmlPath, 'utf8');
-        
-        // ✅ CORRECCIÓN DEFINITIVA: Evita duplicar nonces
         adminHtml = adminHtml.replace(/<script(?![^>]*nonce)([^>]*)>/g, `<script nonce="${nonce}"$1>`);
         adminHtml = adminHtml.replace(/<style(?![^>]*nonce)([^>]*)>/g, `<style nonce="${nonce}"$1>`);
         
@@ -261,6 +324,7 @@ const server = app.listen(PORT, '0.0.0.0', () => {
 👉 Link de tracking: http://localhost:${PORT}/
 👁️  Panel de admin:    http://localhost:${PORT}/admin
 📊 API de datos:       http://localhost:${PORT}/api/clicks
+📈 API de stats:       http://localhost:${PORT}/api/advanced-stats
 ✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨
     `);
 });
@@ -281,22 +345,7 @@ process.on('SIGINT', () => {
     });
 });
 
-// En server.js puedes agregar:
-app.get('/api/stats', (req, res) => {
-    const sql = `
-        SELECT 
-            COUNT(*) as total_clicks,
-            COUNT(DISTINCT ip_address) as unique_ips,
-            COUNT(DISTINCT DATE(timestamp)) as unique_days
-        FROM clicks
-    `;
-    db.get(sql, (err, row) => {
-        if (err) return res.status(500).json({ error: err.message });
-        res.json(row);
-    });
-});
-
-// Agrega esto a server.js
+// Backup automático
 setInterval(() => {
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
     const backupFile = `backups/clicks_auto_${timestamp}.db`;
@@ -307,4 +356,4 @@ setInterval(() => {
         else console.log(`✅ Backup automático: ${backupFile}`);
         backupDb.close();
     });
-}, 24 * 60 * 60 * 1000); // Cada 24 horas
+}, 24 * 60 * 60 * 1000);
