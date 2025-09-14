@@ -1,5 +1,3 @@
-const fetch = require('node-fetch');
-
 /**
  * Obtiene el país de una IP usando API gratuita
  * @param {string} ip - Dirección IP
@@ -7,14 +5,20 @@ const fetch = require('node-fetch');
  */
 async function getCountryFromIP(ip) {
     // Ignorar IPs locales
-    if (ip === '::1' || ip === '127.0.0.1' || ip.startsWith('192.168.') || ip.startsWith('10.') || ip.startsWith('172.')) {
+    if (
+        ip === '::1' ||
+        ip === '127.0.0.1' ||
+        ip.startsWith('192.168.') ||
+        ip.startsWith('10.') ||
+        ip.startsWith('172.')
+    ) {
         return 'Local';
     }
 
     try {
         const response = await fetch(`http://ip-api.com/json/${ip}?fields=country,status`);
         const data = await response.json();
-        
+
         if (data.status === 'success' && data.country) {
             return data.country;
         }
@@ -35,4 +39,15 @@ function normalizeIP(ip) {
     return ip;
 }
 
-module.exports = { getCountryFromIP, normalizeIP };
+/**
+ * Obtiene la IP real del cliente, considerando Railway (proxy)
+ */
+function getClientIp(req) {
+    const forwarded = req.headers['x-forwarded-for'];
+    if (forwarded) {
+        return normalizeIP(forwarded.split(',')[0].trim());
+    }
+    return normalizeIP(req.connection.remoteAddress || req.ip);
+}
+
+module.exports = { getCountryFromIP, normalizeIP, getClientIp };
